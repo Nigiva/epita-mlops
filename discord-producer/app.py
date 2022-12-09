@@ -1,31 +1,8 @@
 from dotenv import load_dotenv
 from loguru import logger
 import os
-import sys
 import discord
-import logging
-
-# Handler for logging to Loguru
-class InterceptHandler(logging.Handler):
-    def emit(self, record):
-        # Get corresponding Loguru level if it exists.
-        try:
-            level = logger.level(record.levelname).name
-        except ValueError:
-            level = record.levelno
-
-        # Find caller from where originated the logged message.
-        frame, depth = sys._getframe(6), 6
-        while frame and frame.f_code.co_filename == logging.__file__:
-            frame = frame.f_back
-            depth += 1
-
-        logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
-
-# Intercept Discord logging
-discord_logger = logging.getLogger('discord')
-discord_logger.setLevel(logging.DEBUG)
-discord_logger.addHandler(InterceptHandler())
+from logger import intercept_discord_logging
 
 logger.info("Starting Discord Producer")
 
@@ -42,6 +19,7 @@ DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 
 # Set up logging
 logger.add(LOG_PATH, rotation="1 day", retention="1 month", level="DEBUG")
+intercept_discord_logging(logger)
 
 # Check the presence of the Discord token
 if DISCORD_TOKEN is None or DISCORD_TOKEN == "":
