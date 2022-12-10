@@ -69,13 +69,14 @@ async def on_message(message):
     
     logger.debug(f"Received message from {message.author}: {message.content}")
     message_object = {
-        "id": message.id,
-        "content": message.content,
+        "channel_id": message.channel.id,
+        "message_id": message.id,
+        "message_content": message.content,
     }
     message_json = json.dumps(message_object)
     producer.send(KAFKA_TOPIC, message_json.encode("utf-8"))
     
-    await message.add_reaction("\N{WHITE HEAVY CHECK MARK}")
+    await message.add_reaction("\N{EYES}")
     #await message.add_reaction("\N{NO ENTRY}")
     
 client.run(DISCORD_TOKEN)

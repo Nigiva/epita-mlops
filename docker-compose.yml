@@ -16,7 +16,7 @@ services:
       KAFKA_BROKER: "kafka:9093"
       DISCORD_TOKEN: ${DISCORD_TOKEN}
       KAFKA_TOPIC: discordmessage
-      WAIT_FOR_KAFKA: 10
+      WAIT_FOR_KAFKA: 20
     volumes:
       - ./log:/app/log
 
@@ -26,13 +26,11 @@ services:
   zookeeper:
     container_name: zookeeper
     image: confluentinc/cp-zookeeper:7.3.0
-    # hostname: zookeeper
     ports:
       - "2181:2181"
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
-      # ALLOW_ANONYMOUS_LOGIN: "yes"
 
   ###########
   ## Kafka ##
@@ -40,7 +38,6 @@ services:
   kafka:
     container_name: kafka
     image: confluentinc/cp-kafka:7.3.0
-    # hostname: kafka
     ports:
       - "9092:9092"
     expose:
@@ -55,3 +52,33 @@ services:
       KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  init_kafka_topics:
+    container_name: init_kafka_topics
+    image: confluentinc/cp-kafka:7.3.0
+    depends_on:
+      - kafka
+    entrypoint: ["/bin/sh", "-c"]
+    command: |
+      "
+      echo 'Waiting for Kafka to be ready...';
+      kafka-topics --bootstrap-server kafka:9093 --list
+
+      echo -e 'Creating kafka topics';
+      kafka-topics --bootstrap-server kafka:9093 --create --if-not-exists --topic discordmessage --partitions 2 --replication-factor 1
+
+      echo 'Kafka is ready !';
+      kafka-topics --bootstrap-server kafka:9093 --list
+      "
+
+  ###################
+  ## Monitor Kafka ##
+  ###################
+  kafdrop:
+    image: obsidiandynamics/kafdrop:3.30.0
+    ports:
+      - "9000:9000"
+    environment:
+      KAFKA_BROKERCONNECT: "kafka:9093"
+    depends_on:
+      - kafka
