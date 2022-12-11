@@ -23,7 +23,7 @@ class InterceptHandler(logging.Handler):
         self.logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
 
 # Intercept Discord logging
-def intercept_logging(name, logger):
+def intercept_logging(name, logger, level = logging.INFO):
     discord_logger = logging.getLogger(name)
-    discord_logger.setLevel(logging.INFO)
+    discord_logger.setLevel(level)
     discord_logger.addHandler(InterceptHandler(logger))
