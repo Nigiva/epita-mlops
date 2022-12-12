@@ -15,6 +15,7 @@ services:
       KAFKA_BROKER: "kafka:9093"
       DISCORD_TOKEN: ${DISCORD_TOKEN}
       KAFKA_TOPIC: discordmessage
+      DEBUG_MODE: "True"
       WAIT_FOR_KAFKA: 20
     volumes:
       - ./log:/app/log
@@ -40,6 +41,24 @@ services:
     volumes:
       - ./log:/app/log
 
+  # Model Instance N°2
+  model_2:
+    container_name: model_2
+    build:
+      context: ./model
+      dockerfile: Dockerfile
+    depends_on:
+      - init_kafka_topics
+      - discord_producer
+    environment:
+      LOG_PATH: log/model-2.log
+      KAFKA_BROKER: "kafka:9093"
+      MESSAGE_KAFKA_TOPIC: discordmessage
+      PREDICTION_KAFKA_TOPIC: modelprediction
+      WAIT_FOR_KAFKA: 20
+    volumes:
+      - ./log:/app/log
+  
   #########################
   ## Prediction Consumer ##
   #########################
