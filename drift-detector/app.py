@@ -58,7 +58,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 client = discord.AutoShardedClient(
     intents=intents, 
-    shard_count=2,
+    shard_count=3,
     max_ratelimit_timeout=30,
 )
 
@@ -73,7 +73,7 @@ consumer = KafkaConsumer(
 consumer.subscribe(topics=[KAFKA_TOPIC])
 
 # Discord client events
-@tasks.loop(minutes=MINUTES_BETWEEN_ITERATIONS, reconnect=True) # TODO Changer en minutes
+@tasks.loop(minutes=MINUTES_BETWEEN_ITERATIONS, reconnect=True)
 async def check_for_drift():
     logger.info("Checking for drift")
     if len(buffer) < BUFFER_SIZE:

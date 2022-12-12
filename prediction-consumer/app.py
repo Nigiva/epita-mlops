@@ -48,7 +48,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 client = discord.AutoShardedClient(
     intents=intents, 
-    shard_count=2,
+    shard_count=3,
     max_ratelimit_timeout=30,
 )
 

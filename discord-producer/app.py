@@ -46,7 +46,11 @@ intercept_logging("kafka", logger)
 intents = discord.Intents.default()
 intents.message_content = True
 
-client = discord.Client(intents=intents)
+client = discord.Client(
+    intents=intents,
+    shard_count=3,
+    max_ratelimit_timeout=30,
+)
 
 # Set up Kafka producer
 logger.info("Waiting for Kafka broker to be ready")
@@ -55,8 +59,6 @@ time.sleep(WAIT_FOR_KAFKA)
 logger.info("Setting up Kafka producer")
 producer = KafkaProducer(
     bootstrap_servers=KAFKA_BROKER,
-    # api_version=(2, 5, 0), # Works !
-    # api_version_auto_timeout_ms=300_000, # Didn't work !
 )
 
 # Event handler for when the bot is ready
