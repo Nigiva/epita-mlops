@@ -40,6 +40,26 @@ services:
     volumes:
       - ./log:/app/log
 
+  #########################
+  ## Prediction Consumer ##
+  #########################
+  prediction_consumer:
+    container_name: prediction_consumer
+    build:
+      context: ./prediction-consumer
+      dockerfile: Dockerfile
+    depends_on:
+      - init_kafka_topics
+    environment:
+      LOG_PATH: log/prediction-consumer.log
+      KAFKA_BROKER: "kafka:9093"
+      DISCORD_TOKEN: ${DISCORD_TOKEN}
+      KAFKA_TOPIC: modelprediction
+      DEBUG_MODE: "True"
+      WAIT_FOR_KAFKA: 20
+    volumes:
+      - ./log:/app/log
+
   ###############
   ## Zookeeper ##
   ###############
