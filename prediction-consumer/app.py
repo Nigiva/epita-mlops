@@ -67,19 +67,24 @@ async def get_kafka_consumer():
     await consumer.start()
     return consumer
 
-async def process_discord_message(channel_id, message_id, is_toxic):
-    logger.debug(f"Process discord message {message_id=} {channel_id=}")
+async def get_discord_message(channel_id, message_id):
     logger.debug(f"Getting Discord Channels: {channel_id=}")
     discord_channel = client.get_channel(channel_id)
     if discord_channel is None:
         logger.error(f"Discord channel {channel_id} not found")
-        return
+        return None
     
     try:
-        logger.debug(f"Fetching Discord Message: {message_id=}")
-        discord_message = await discord_channel.fetch_message(message_id)
+        logger.debug(f"Fetching Discord Message {message_id=}")
+        return await discord_channel.fetch_message(message_id)
     except discord.errors.NotFound:
         logger.error(f"Discord message {message_id} not found")
+        return None
+
+async def process_discord_message(channel_id, message_id, is_toxic):
+    logger.debug(f"Process discord message {message_id=} {channel_id=}")
+    discord_message = await get_discord_message(channel_id, message_id)
+    if discord_message is None:
         return
 
     if not DEBUG_MODE and is_toxic:
