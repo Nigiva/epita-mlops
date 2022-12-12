@@ -10,6 +10,12 @@ import json
 import logging
 import threading
 from collections import deque
+import datetime
+from matplotlib import pyplot as plt
+import io
+import eurybia
+
+MODERATOR_IMAGE_URL = "https://cdn.discordapp.com/app-icons/1050840682492870686/99b2bdf30af9f3cd2a72d52895178986.png"
 
 logger.info("Starting Drift Detector")
 
@@ -36,8 +42,10 @@ KAFKA_BROKER = os.getenv("KAFKA_BROKER", "localhost:9092")
 logger.info(f"Kafka broker: {KAFKA_BROKER}")
 KAFKA_TOPIC = os.getenv("KAFKA_TOPIC", "modelprediction")
 logger.info(f"Kafka topic: {KAFKA_TOPIC}")
-BUFFER_SIZE = int(os.getenv("BUFFER_SIZE", "1000"))
-logger.info(f"Buffer size: {BUFFER_SIZE}")
+PREDICTION_BUFFER_SIZE = int(os.getenv("PREDICTION_BUFFER_SIZE", "1000"))
+logger.info(f"Buffer size: {PREDICTION_BUFFER_SIZE}")
+AUC_BUFFER_SIZE = int(os.getenv("AUC_BUFFER_SIZE", "1000"))
+logger.info(f"Buffer size: {AUC_BUFFER_SIZE}")
 MINUTES_BETWEEN_ITERATIONS = int(os.getenv("MINUTES_BETWEEN_ITERATIONS", "5"))
 logger.info(f"Minutes between iterations : {MINUTES_BETWEEN_ITERATIONS}")
 MONITORING_CHANNEL_ID = int(os.getenv("MONITORING_CHANNEL_ID"))
@@ -53,7 +61,8 @@ intercept_logging("discord", logger, level=logging.ERROR)
 intercept_logging("kafka", logger)
 
 # Set up buffer
-buffer = deque(maxlen=BUFFER_SIZE)
+prediction_buffer = deque(maxlen=PREDICTION_BUFFER_SIZE)
+auc_buffer = deque(maxlen=AUC_BUFFER_SIZE)
 
 # Set up Discord intents
 intents = discord.Intents.default()
@@ -74,17 +83,93 @@ consumer = KafkaConsumer(
 )
 consumer.subscribe(topics=[KAFKA_TOPIC])
 
+def get_data_drift():
+    # TODO
+    import random
+    return random.random()
+
+def generate_auc_embed(auc_score, datetime_str):
+    # Generate image
+    data_stream = io.BytesIO()
+    smart_plotter = eurybia.core.smartplotter.SmartPlotter(smartdrift=None)
+    plotly_figure = smart_plotter.generate_indicator(auc_score)
+    image_byte = plotly_figure.to_image(format="png", width=500, height=300, scale=1)
+    data_stream.write(image_byte)
+    
+    # Generate embed
+    data_stream.seek(0)
+    chart_file = discord.File(data_stream, filename="auc_chart.png")
+    embed=discord.Embed(
+        title="Moderation Report",
+        color=0xf5c211
+    )
+    embed.set_image(
+        url="attachment://auc_chart.png"
+    )
+    embed.add_field(name="Data Drift Score", value=str(auc_score), inline=False)
+    embed.set_footer(text=datetime_str)
+    
+    return embed, chart_file
+
+def generate_auc_evolution_embed(datetime_str):
+    auc_list = list(auc_buffer.copy())
+    data_stream = io.BytesIO()
+    
+    # Generate chart
+    plt.figure(figsize=(8,3))
+    plt.plot(auc_list)
+    plt.title("AUC Evolution")
+    plt.xlabel("Iterations")
+    plt.xticks([i + 1 for i in range(len(auc_list))])
+    plt.ylabel("AUC Score")
+    plt.savefig(data_stream, format="png", bbox_inches="tight", dpi = 80)
+    plt.close()
+    
+    # Generate embed
+    data_stream.seek(0)
+    chart_file = discord.File(data_stream, filename="auc_evolution_chart.png")
+    
+    embed=discord.Embed(
+        title="Moderation Report", 
+        description="Data Drift Score Evolution",
+        color=0x1c71d8,
+    )
+    embed.set_image(
+        url="attachment://auc_evolution_chart.png"
+    )
+    embed.set_footer(text=datetime_str)
+    
+    return embed, chart_file
+
 # Discord client events
 @tasks.loop(minutes=MINUTES_BETWEEN_ITERATIONS, reconnect=True)
 async def check_for_drift(channel):
     logger.info("Checking for drift")
-    if len(buffer) < BUFFER_SIZE:
+    now = datetime.datetime.now()
+    datetime_str = now.strftime("%d/%m/%Y - %H:%M:%S")
+    current_buffer = list(prediction_buffer.copy())
+    
+    if len(current_buffer) < PREDICTION_BUFFER_SIZE:
         logger.warning("Buffer not full, ignoring check")
         return
     
-    current_buffer = list(buffer.copy())
-    await channel.send("Test")
-    logger.success("Drift check is finished")
+    # Remove last element to make sure we don't predict on the same data twice
+    # So we force to wait a new example to have the buffer full
+    prediction_buffer.pop() 
+    
+    logger.info("Computing Data Drift")
+    auc_score = get_data_drift()
+    auc_buffer.append(auc_score)
+    logger.success("Data Drift has been computed")
+    auc_score_embed, auc_file = generate_auc_embed(auc_score, datetime_str)
+    logger.success("AUC embed has been generated")
+    auc_evolution_embed, auc_evolution_file = generate_auc_evolution_embed(datetime_str)
+    logger.success("AUC evolution embed has been generated")
+    
+    # Send message to Discord channel
+    await channel.send(embeds=[auc_score_embed, auc_evolution_embed], files=[auc_file, auc_evolution_file])
+    logger.success("Report has been sent to Discord")
+    
 
 @client.event
 async def on_ready():
@@ -105,7 +190,7 @@ def stream_to_buffer():
         message_id = prediction_obj["message_id"]
         logger.debug(f"Received message {message_id}")
         
-        buffer.append(prediction_obj)
+        prediction_buffer.append(prediction_obj)
         consumer.commit()
 threading.Thread(target=stream_to_buffer).start()
 
