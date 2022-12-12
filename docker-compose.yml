@@ -69,12 +69,38 @@ services:
       dockerfile: Dockerfile
     depends_on:
       - init_kafka_topics
+      - model_1
+      - model_2
     environment:
       LOG_PATH: log/prediction-consumer.log
       KAFKA_BROKER: "kafka:9093"
       DISCORD_TOKEN: ${DISCORD_TOKEN}
       KAFKA_TOPIC: modelprediction
       DEBUG_MODE: "True"
+      WAIT_FOR_KAFKA: 20
+    volumes:
+      - ./log:/app/log
+
+  ####################
+  ## Drift Detector ##
+  ####################
+  drift_detector:
+    container_name: drift_detector
+    build:
+      context: ./drift-detector
+      dockerfile: Dockerfile
+    depends_on:
+      - init_kafka_topics
+      - prediction_consumer
+    environment:
+      LOG_PATH: log/drift-dectector.log
+      KAFKA_BROKER: "kafka:9093"
+      DISCORD_TOKEN: ${DISCORD_TOKEN}
+      KAFKA_TOPIC: modelprediction
+      PREDICTION_BUFFER_SIZE: 10
+      AUC_BUFFER_SIZE: 50
+      MINUTES_BETWEEN_ITERATIONS: 1
+      MONITORING_CHANNEL_ID: 1051849968148815902
       WAIT_FOR_KAFKA: 20
     volumes:
       - ./log:/app/log

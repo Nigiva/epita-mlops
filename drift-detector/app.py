@@ -15,6 +15,9 @@ from matplotlib import pyplot as plt
 import io
 import eurybia
 import pandas as pd
+import functools
+import typing
+import asyncio
 
 MODERATOR_IMAGE_URL = "https://cdn.discordapp.com/app-icons/1050840682492870686/99b2bdf30af9f3cd2a72d52895178986.png"
 
@@ -51,8 +54,6 @@ MINUTES_BETWEEN_ITERATIONS = int(os.getenv("MINUTES_BETWEEN_ITERATIONS", "5"))
 logger.info(f"Minutes between iterations : {MINUTES_BETWEEN_ITERATIONS}")
 MONITORING_CHANNEL_ID = int(os.getenv("MONITORING_CHANNEL_ID"))
 logger.info(f"Channel {MONITORING_CHANNEL_ID} is the monitoring channel")
-DEBUG_MODE = os.getenv("DEBUG_MODE", "False") == "True"
-logger.info(f"Debug mode: {DEBUG_MODE}")
 WAIT_FOR_KAFKA = int(os.getenv("WAIT_FOR_KAFKA", 10))
 logger.info(f"Wait for Kafka (secondes): {WAIT_FOR_KAFKA}")
 
@@ -89,10 +90,20 @@ consumer = KafkaConsumer(
 )
 consumer.subscribe(topics=[KAFKA_TOPIC])
 
+def to_thread(func: typing.Callable) -> typing.Coroutine:
+    @functools.wraps(func)
+    async def wrapper(*args, **kwargs):
+        loop = asyncio.get_event_loop()
+        wrapped_func = functools.partial(func, *args, **kwargs)
+        return await loop.run_in_executor(None, wrapped_func)
+    return wrapper
+
+
 def from_prediction_list_to_dataframe(prediction_list):
     embedding_list = [prediction["sentence_embedding"] for prediction in prediction_list]
     return pd.DataFrame(embedding_list)
 
+@to_thread
 def get_data_drift(prediction_list):
     logger.info("Computing data drift")
     
@@ -112,6 +123,7 @@ def get_data_drift(prediction_list):
     logger.success(f"SmartDrift has been compiled and the drift score is AUC={sd.auc}")
     return sd.auc
 
+@to_thread
 def generate_auc_embed(auc_score, datetime_str):
     # Generate image
     data_stream = io.BytesIO()
@@ -135,6 +147,7 @@ def generate_auc_embed(auc_score, datetime_str):
     
     return embed, chart_file
 
+@to_thread
 def generate_auc_evolution_embed(datetime_str):
     auc_list = list(auc_buffer.copy())
     data_stream = io.BytesIO()
@@ -182,12 +195,12 @@ async def check_for_drift(channel):
     prediction_buffer.pop() 
     
     logger.info("Computing Data Drift")
-    auc_score = get_data_drift(current_buffer)
+    auc_score = await get_data_drift(current_buffer)
     auc_buffer.append(auc_score)
     logger.success("Data Drift has been computed")
-    auc_score_embed, auc_file = generate_auc_embed(auc_score, datetime_str)
+    auc_score_embed, auc_file = await generate_auc_embed(auc_score, datetime_str)
     logger.success("AUC embed has been generated")
-    auc_evolution_embed, auc_evolution_file = generate_auc_evolution_embed(datetime_str)
+    auc_evolution_embed, auc_evolution_file = await generate_auc_evolution_embed(datetime_str)
     logger.success("AUC evolution embed has been generated")
     
     # Send message to Discord channel

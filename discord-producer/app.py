@@ -58,6 +58,7 @@ time.sleep(WAIT_FOR_KAFKA)
 logger.info("Setting up Kafka producer")
 producer = KafkaProducer(
     bootstrap_servers=KAFKA_BROKER,
+    api_version_auto_timeout_ms=30_000,
 )
 
 # Event handler for when the bot is ready
