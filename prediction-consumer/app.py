@@ -7,6 +7,7 @@ from aiokafka import AIOKafkaConsumer
 import time
 import json
 import logging
+import asyncio
 
 logger.info("Starting Prediction Consumer")
 
@@ -84,6 +85,8 @@ async def get_discord_message(channel_id, message_id):
 async def process_discord_message(channel_id, message_id, is_toxic):
     logger.debug(f"Process discord message {message_id=} {channel_id=}")
     discord_message = await get_discord_message(channel_id, message_id)
+    await asyncio.sleep(0.4) # Avoid rate limit
+    
     if discord_message is None:
         return
 
