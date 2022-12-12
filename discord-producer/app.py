@@ -32,6 +32,8 @@ KAFKA_BROKER = os.getenv("KAFKA_BROKER", "localhost:9092")
 logger.info(f"Kafka broker: {KAFKA_BROKER}")
 KAFKA_TOPIC = os.getenv("KAFKA_TOPIC", "discordmessage")
 logger.info(f"Kafka topic: {KAFKA_TOPIC}")
+DEBUG_MODE = os.getenv("DEBUG_MODE", "False") == "True"
+logger.info(f"Debug mode: {DEBUG_MODE}")
 WAIT_FOR_KAFKA = int(os.getenv("WAIT_FOR_KAFKA", 10))
 logger.info(f"Wait for Kafka (secondes): {WAIT_FOR_KAFKA}")
 
@@ -75,8 +77,9 @@ async def on_message(message):
     }
     message_json = json.dumps(message_object)
     producer.send(KAFKA_TOPIC, message_json.encode("utf-8"))
+    logger.info(f"Sent message {message.id} to Kafka")
     
-    await message.add_reaction("\N{EYES}")
-    #await message.add_reaction("\N{NO ENTRY}")
+    if DEBUG_MODE:
+        await message.add_reaction("\N{EYES}")
     
 client.run(DISCORD_TOKEN)
