@@ -3,7 +3,7 @@ from loguru import logger
 import os
 import discord
 from logger import intercept_logging
-from kafka import KafkaConsumer
+from aiokafka import AIOKafkaConsumer
 import time
 import json
 import logging
@@ -53,14 +53,19 @@ client = discord.AutoShardedClient(
 )
 
 # Set up Kafka consumer
-logger.info("Waiting for Kafka broker to be ready")
-time.sleep(WAIT_FOR_KAFKA)
+async def get_kafka_consumer():
+    logger.info("Waiting for Kafka broker to be ready")
+    time.sleep(WAIT_FOR_KAFKA)
 
-consumer = KafkaConsumer(
-    bootstrap_servers=KAFKA_BROKER,
-    group_id="prediction-consumer",
-)
-consumer.subscribe(topics=[KAFKA_TOPIC])
+    consumer = AIOKafkaConsumer(
+        bootstrap_servers=KAFKA_BROKER,
+        group_id="prediction-consumer",
+    )
+    logger.info("Connected to Kafka broker")
+    consumer.subscribe(topics=[KAFKA_TOPIC])
+    logger.info("Subscribed to Kafka topic")
+    await consumer.start()
+    return consumer
 
 async def process_discord_message(channel_id, message_id, is_toxic):
     logger.debug(f"Process discord message {message_id=} {channel_id=}")
@@ -93,21 +98,26 @@ async def process_discord_message(channel_id, message_id, is_toxic):
             logger.debug(f"Add reaction to Discord Message {message_id=}")
             await discord_message.add_reaction("\N{WHITE HEAVY CHECK MARK}")
             
-            
-        
-        
+
 @client.event
 async def on_ready():
+    logger.success("Discord client ready !")
+    consumer = await get_kafka_consumer()
+    logger.success("Consumer started !")
     logger.success("Prediction Consumer is ready !")
-    for prediction in consumer:
-        prediction_str = prediction.value.decode("utf-8")
-        prediction_obj = json.loads(prediction_str)
-        
-        channel_id = prediction_obj["channel_id"]
-        message_id = prediction_obj["message_id"]
-        is_toxic = prediction_obj["is_toxic"]
-        
-        logger.debug(f"Received prediction {message_id=} {channel_id=} {is_toxic=}")
-        await process_discord_message(channel_id, message_id, is_toxic)
+    try:
+        async for prediction in consumer:
+            prediction_str = prediction.value.decode("utf-8")
+            prediction_obj = json.loads(prediction_str)
+            
+            channel_id = prediction_obj["channel_id"]
+            message_id = prediction_obj["message_id"]
+            is_toxic = prediction_obj["is_toxic"]
+            
+            logger.debug(f"Received prediction {message_id=} {channel_id=} {is_toxic=}")
+            await process_discord_message(channel_id, message_id, is_toxic)
+    finally:
+        logger.info("Stopping consumer")
+        await consumer.stop()
 
 client.run(DISCORD_TOKEN)
