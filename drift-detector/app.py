@@ -40,6 +40,8 @@ BUFFER_SIZE = int(os.getenv("BUFFER_SIZE", "1000"))
 logger.info(f"Buffer size: {BUFFER_SIZE}")
 MINUTES_BETWEEN_ITERATIONS = int(os.getenv("MINUTES_BETWEEN_ITERATIONS", "5"))
 logger.info(f"Minutes between iterations : {MINUTES_BETWEEN_ITERATIONS}")
+MONITORING_CHANNEL_ID = int(os.getenv("MONITORING_CHANNEL_ID"))
+logger.info(f"Channel {MONITORING_CHANNEL_ID} is the monitoring channel")
 DEBUG_MODE = os.getenv("DEBUG_MODE", "False") == "True"
 logger.info(f"Debug mode: {DEBUG_MODE}")
 WAIT_FOR_KAFKA = int(os.getenv("WAIT_FOR_KAFKA", 10))
@@ -59,7 +61,6 @@ intents.message_content = True
 client = discord.AutoShardedClient(
     intents=intents, 
     shard_count=3,
-    max_ratelimit_timeout=30,
 )
 
 # Set up Kafka consumer
@@ -68,24 +69,32 @@ time.sleep(WAIT_FOR_KAFKA)
 
 consumer = KafkaConsumer(
     bootstrap_servers=KAFKA_BROKER,
-    group_id="datadrift-detector",
+    group_id="drift-detector",
+    auto_offset_reset="earliest",
 )
 consumer.subscribe(topics=[KAFKA_TOPIC])
 
 # Discord client events
 @tasks.loop(minutes=MINUTES_BETWEEN_ITERATIONS, reconnect=True)
-async def check_for_drift():
+async def check_for_drift(channel):
     logger.info("Checking for drift")
     if len(buffer) < BUFFER_SIZE:
         logger.warning("Buffer not full, ignoring check")
         return
     
     current_buffer = list(buffer.copy())
+    await channel.send("Test")
     logger.success("Drift check is finished")
 
 @client.event
 async def on_ready():
-    check_for_drift.start()
+    logger.debug(f"Getting Discord Channel {MONITORING_CHANNEL_ID}")
+    channel = client.get_channel(MONITORING_CHANNEL_ID)
+    if channel is None:
+        logger.critical(f"Discord channel {MONITORING_CHANNEL_ID} not found")
+        return
+    
+    check_for_drift.start(channel)
 
 # Add predictions to buffer
 def stream_to_buffer():
@@ -97,6 +106,7 @@ def stream_to_buffer():
         logger.debug(f"Received message {message_id}")
         
         buffer.append(prediction_obj)
+        consumer.commit()
 threading.Thread(target=stream_to_buffer).start()
 
 client.run(DISCORD_TOKEN)

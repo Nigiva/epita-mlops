@@ -49,6 +49,7 @@ time.sleep(WAIT_FOR_KAFKA)
 consumer = KafkaConsumer(
     bootstrap_servers=KAFKA_BROKER,
     group_id="prediction-consumer",
+    auto_offset_reset="earliest",
 )
 consumer.subscribe(topics=[MESSAGE_KAFKA_TOPIC])
 
@@ -83,7 +84,11 @@ for message in consumer:
         "sentence_embedding": sentence_embedding.tolist()
     }
     
+    # Send to prediction-model stream
     logger.debug("Sending prediction to the stream")
     prediction_str = json.dumps(prediction_obj).encode("utf-8")
     producer.send(PREDICTION_KAFKA_TOPIC, prediction_str)
     logger.success(f"Prediction sent to the stream for {message_id=} {channel_id=}")
+    
+    # Commit message
+    consumer.commit()

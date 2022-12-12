@@ -49,7 +49,6 @@ intents.message_content = True
 client = discord.Client(
     intents=intents,
     shard_count=3,
-    max_ratelimit_timeout=30,
 )
 
 # Set up Kafka producer

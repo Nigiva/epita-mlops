@@ -47,9 +47,8 @@ intercept_logging("kafka", logger)
 intents = discord.Intents.default()
 intents.message_content = True
 client = discord.AutoShardedClient(
-    intents=intents, 
+    intents=intents,
     shard_count=3,
-    max_ratelimit_timeout=30,
 )
 
 # Set up Kafka consumer
@@ -60,6 +59,7 @@ async def get_kafka_consumer():
     consumer = AIOKafkaConsumer(
         bootstrap_servers=KAFKA_BROKER,
         group_id="prediction-consumer",
+        auto_offset_reset="earliest",
     )
     logger.info("Connected to Kafka broker")
     consumer.subscribe(topics=[KAFKA_TOPIC])
@@ -121,6 +121,7 @@ async def on_ready():
             
             logger.debug(f"Received prediction {message_id=} {channel_id=} {is_toxic=}")
             await process_discord_message(channel_id, message_id, is_toxic)
+            await consumer.commit()
     finally:
         logger.info("Stopping consumer")
         await consumer.stop()
