@@ -14,6 +14,7 @@ import datetime
 from matplotlib import pyplot as plt
 import io
 import eurybia
+import pandas as pd
 
 MODERATOR_IMAGE_URL = "https://cdn.discordapp.com/app-icons/1050840682492870686/99b2bdf30af9f3cd2a72d52895178986.png"
 
@@ -64,6 +65,11 @@ intercept_logging("kafka", logger)
 prediction_buffer = deque(maxlen=PREDICTION_BUFFER_SIZE)
 auc_buffer = deque(maxlen=AUC_BUFFER_SIZE)
 
+# Load subset of embedding extracted from training data
+train_embedding_df = pd.read_csv("data/train_embedding.csv", index_col=0)
+# Fix column names which are strings by default in reading from CSV
+train_embedding_df.columns = train_embedding_df.columns.astype("int64")
+
 # Set up Discord intents
 intents = discord.Intents.default()
 intents.message_content = True
@@ -83,10 +89,28 @@ consumer = KafkaConsumer(
 )
 consumer.subscribe(topics=[KAFKA_TOPIC])
 
-def get_data_drift():
-    # TODO
-    import random
-    return random.random()
+def from_prediction_list_to_dataframe(prediction_list):
+    embedding_list = [prediction["sentence_embedding"] for prediction in prediction_list]
+    return pd.DataFrame(embedding_list)
+
+def get_data_drift(prediction_list):
+    logger.info("Computing data drift")
+    
+    logger.debug(f"Converting list of prediction objects to dataframe")
+    current_embedding_df = from_prediction_list_to_dataframe(prediction_list)
+    logger.debug(f"Dataframe shape: {current_embedding_df.shape}")
+    logger.debug(f"Instantiating SmartDrift")
+    sd = eurybia.SmartDrift(
+        df_current=current_embedding_df,
+        df_baseline=train_embedding_df,
+    )
+    
+    # Compile the drift detector (1 to 5 minutes)
+    logger.info(f"Compiling SmartDrift (1 to 5 minutes)")
+    sd.compile()
+    
+    logger.success(f"SmartDrift has been compiled and the drift score is AUC={sd.auc}")
+    return sd.auc
 
 def generate_auc_embed(auc_score, datetime_str):
     # Generate image
@@ -158,7 +182,7 @@ async def check_for_drift(channel):
     prediction_buffer.pop() 
     
     logger.info("Computing Data Drift")
-    auc_score = get_data_drift()
+    auc_score = get_data_drift(current_buffer)
     auc_buffer.append(auc_score)
     logger.success("Data Drift has been computed")
     auc_score_embed, auc_file = generate_auc_embed(auc_score, datetime_str)
