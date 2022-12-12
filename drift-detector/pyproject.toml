@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "drift-detector"
+version = "0.1.0"
+description = ""
+authors = ["Corentin Duchêne <corentin.duchene@epita.fr>"]
+
+[tool.poetry.dependencies]
+python = "3.8.16"
+eurybia = "^1.1.0"
+python-dotenv = "^0.21.0"
+loguru = "^0.6.0"
+kafka-python = "^2.0.2"
+"discord.py" = "^2.1.0"
+matplotlib = "^3.6.2"
+pandas = "^1.5.2"
+
+[tool.poetry.dev-dependencies]
+jupyter = "^1.0.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
