@@ -71,6 +71,7 @@ services:
       - init_kafka_topics
       - model_1
       - model_2
+    restart: on-failure
     environment:
       LOG_PATH: log/prediction-consumer.log
       KAFKA_BROKER: "kafka:9093"

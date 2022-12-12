@@ -82,6 +82,17 @@ async def get_discord_message(channel_id, message_id):
         logger.error(f"Discord message {message_id} not found")
         return None
 
+# Create a decorate to catch rate limit and exit 1
+def crash_after_http_exception(func):
+    async def wrapper(*args, **kwargs):
+        try:
+            return await func(*args, **kwargs)
+        except discord.errors.HTTPException as e:
+            logger.critical(e)
+            exit(1)
+    return wrapper
+
+@crash_after_http_exception
 async def process_discord_message(channel_id, message_id, is_toxic):
     logger.debug(f"Process discord message {message_id=} {channel_id=}")
     discord_message = await get_discord_message(channel_id, message_id)
